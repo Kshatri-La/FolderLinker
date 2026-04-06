@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<VBox spacing="5" xmlns="http://javafx.com/javafx/13" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.filelinker.BrowserController">
+    <HBox spacing="5" alignment="CENTER_LEFT">
+        <Button text="Import Folder" onAction="#handleImport" />
+        <TextField fx:id="pathField" editable="false" HBox.hgrow="ALWAYS" />
+    </HBox>
+    <ToolBar>
+        <items>
+            <Button text="[+] New Folder" onAction="#handleNewFolder" />
+            <Button text="[❌] Delete" onAction="#handleDelete" />
+            <Button text="[📤] Export" onAction="#handleExport" />
+            <Button text="[🔄] Refresh" onAction="#handleRefresh" />
+        </items>
+    </ToolBar>
+    <TreeTableView fx:id="fileTable" VBox.vgrow="ALWAYS" showRoot="false">
+        <columns>
+            <TreeTableColumn fx:id="nameColumn" text="Name" prefWidth="250" />
+            <TreeTableColumn fx:id="sizeColumn" text="Size" prefWidth="80" />
+            <TreeTableColumn fx:id="dateColumn" text="Modified Date" prefWidth="150" />
+        </columns>
+    </TreeTableView>
+</VBox>
