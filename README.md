@@ -41,14 +41,18 @@ Thay vì phải tốn thời gian mở hàng chục cửa sổ Windows lồng gh
 - **Radar Phát Hiện Bãi Đáp:** Thay vì hiển thị hộp thoại cảnh báo "mù", hệ thống sẽ tự động nhảy chuột dòng kẻ và bôi đen vùng thư mục đáp đất, kèm list tên file sẽ di chuyển để bạn kiểm chứng trước khi bấm OK.
 - **Bộ Phân Loại Bậc Cao (Sorting):** Click thẳng vào tiêu đề các cột (Name, Size, Date) để tùy biến chiều ưu tiên. Hỗ trợ _Sắp xếp số học tự nhiên_ (ví dụ: `Bài 2` sẽ đứng chuẩn xác trước `Bài 10` chứ không xếp láo lộn xộn).
 
-## Demos
+## Example
+
 ## Single
+
 <img width="1225" height="416" alt="Ảnh chụp màn hình 2026-04-07 085051" src="https://github.com/user-attachments/assets/9c194902-5128-4ecf-95f1-3d7ca843d71c" />
 <img width="1234" height="742" alt="Ảnh chụp màn hình 2026-04-07 085108" src="https://github.com/user-attachments/assets/9931b16d-bf4a-4f28-a8c7-390385e1c243" />
 <img width="1233" height="655" alt="Ảnh chụp màn hình 2026-04-07 085120" src="https://github.com/user-attachments/assets/c97a875c-00ba-4b46-ad86-2aceb58c7d53" />
 <img width="1233" height="741" alt="Ảnh chụp màn hình 2026-04-07 085136" src="https://github.com/user-attachments/assets/ffdb7af6-9279-4e8b-85c3-71b843aeda9c" />
 <img width="1234" height="753" alt="Ảnh chụp màn hình 2026-04-07 085145" src="https://github.com/user-attachments/assets/37cc1910-1ed9-4a83-b691-44b3ac1629ac" />
 <img width="1229" height="749" alt="Ảnh chụp màn hình 2026-04-07 085153" src="https://github.com/user-attachments/assets/14b4e3f7-0fa7-4500-96a1-3a75bccd0eaf" />
+
 ## Multi
+
 <img width="1231" height="515" alt="Ảnh chụp màn hình 2026-04-07 091546" src="https://github.com/user-attachments/assets/2f6059fa-f352-4c41-b42c-46c0fb0c6ed9" />
 <img width="1239" height="407" alt="Ảnh chụp màn hình 2026-04-07 091600" src="https://github.com/user-attachments/assets/d9c87b72-f113-4a43-9be8-bd5c5661e218" />
