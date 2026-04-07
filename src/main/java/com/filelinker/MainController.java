@@ -1,3 +1,4 @@
+// Coordinates standard UI synchronization between the two independent BrowserController instances.
 package com.filelinker;
 
 import javafx.fxml.FXML;
@@ -9,7 +10,6 @@ public class MainController {
 
     @FXML
     public void initialize() {
-        // When one browser changes link state or transfers files, notify both to refresh
         Runnable refreshBoth = () -> {
             leftBrowserController.refreshList();
             rightBrowserController.refreshList();

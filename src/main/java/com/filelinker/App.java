@@ -1,3 +1,4 @@
+// Initializes the primary JavaFX stage, scene graph, and loads the main FXML layout window.
 package com.filelinker;
 
 import javafx.application.Application;
@@ -8,9 +9,6 @@ import javafx.stage.Stage;
 
 import java.io.IOException;
 
-/**
- * JavaFX App
- */
 public class App extends Application {
 
     private static Scene scene;

@@ -1,3 +1,4 @@
+// Represents a file or folder node in the directory tree, managing its lazy-loaded metadata and link states.
 package com.filelinker;
 
 import java.io.File;
