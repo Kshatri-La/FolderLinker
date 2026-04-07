@@ -40,7 +40,13 @@ public class BrowserController {
         nameColumn.setCellFactory(createNameCellFactory());
 
         fileTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-        fileTable.setSortPolicy(tv -> false);
+        
+        fileTable.setSortPolicy(table -> {
+            if (table.getRoot() != null) {
+                sortItemsRecursively(table.getRoot(), table.getSortOrder());
+            }
+            return true;
+        });
         
         // Căn chỉnh giãn cách trên dưới theo yêu cầu và tăng rõ độ thụt dòng
         fileTable.setFixedCellSize(32);
@@ -180,11 +186,39 @@ public class BrowserController {
     }
 
     private void refreshPaths(TreeItem<FileItem> node) {
-        if (!node.isLeaf() && node.getChildren() != null) {
+        if (node.getValue() != null && node.getValue().isDirectory()) {
             ObservableList<TreeItem<FileItem>> children = node.getChildren();
 
             boolean hasDummy = children.size() == 1 && children.get(0).getValue() != null && children.get(0).getValue().getFile().getName().isEmpty();
             if (hasDummy) return;
+
+            File dir = node.getValue().getFile();
+            File[] files = dir.listFiles();
+            if (files != null) {
+                children.removeIf(child -> {
+                    File f = child.getValue().getFile();
+                    return f != null && !f.exists();
+                });
+                for (File f : files) {
+                    boolean found = false;
+                    for (TreeItem<FileItem> child : children) {
+                        if (child.getValue().getFile().equals(f)) {
+                            found = true;
+                            child.getValue().updateInfo();
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        FileItem subFileItem = new FileItem(f);
+                        boolean linked = LinkManager.getInstance().isLinked(subFileItem.getName());
+                        subFileItem.setLinked(linked);
+                        if (linked) {
+                            subFileItem.setLinkColor(LinkManager.getInstance().getColor(subFileItem.getName()));
+                        }
+                        children.add(createNode(subFileItem));
+                    }
+                }
+            }
 
             List<TreeItem<FileItem>> safeChildren = new ArrayList<>(children);
             for (TreeItem<FileItem> child : safeChildren) {
@@ -200,7 +234,7 @@ public class BrowserController {
                     }
                 }
             }
-            sortItems(children);
+            sortItems(children, fileTable.getSortOrder());
         }
     }
 
@@ -229,7 +263,7 @@ public class BrowserController {
                                 newChildren.add(createNode(subFileItem));
                             }
                             item.getChildren().setAll(newChildren);
-                            sortItems(item.getChildren());
+                            sortItems(item.getChildren(), fileTable.getSortOrder());
                         }
                     }
                 }
@@ -238,7 +272,20 @@ public class BrowserController {
         return item;
     }
 
-    private void sortItems(ObservableList<TreeItem<FileItem>> items) {
+    private void sortItemsRecursively(TreeItem<FileItem> node, ObservableList<TreeTableColumn<FileItem, ?>> sortOrder) {
+        if (node.getChildren() != null && !node.getChildren().isEmpty()) {
+            sortItems(node.getChildren(), sortOrder);
+            for (TreeItem<FileItem> child : node.getChildren()) {
+                sortItemsRecursively(child, sortOrder);
+            }
+        }
+    }
+
+    private void sortItems(ObservableList<TreeItem<FileItem>> items, ObservableList<TreeTableColumn<FileItem, ?>> sortOrder) {
+        TreeTableColumn<FileItem, ?> sortColumn = sortOrder.isEmpty() ? nameColumn : sortOrder.get(0);
+        TreeTableColumn.SortType sortType = sortColumn == null ? TreeTableColumn.SortType.ASCENDING : sortColumn.getSortType();
+        int dir = (sortType == TreeTableColumn.SortType.DESCENDING) ? -1 : 1;
+
         items.sort((o1, o2) -> {
             FileItem item1 = o1.getValue();
             FileItem item2 = o2.getValue();
@@ -250,8 +297,49 @@ public class BrowserController {
             if (item1.isDirectory() && !item2.isDirectory()) return -1;
             if (!item1.isDirectory() && item2.isDirectory()) return 1;
             
-            return item1.getName().compareToIgnoreCase(item2.getName());
+            int result = 0;
+            if (sortColumn == dateColumn) {
+                long d1 = item1.getFile().lastModified();
+                long d2 = item2.getFile().lastModified();
+                result = Long.compare(d1, d2);
+            } else if (sortColumn == sizeColumn) {
+                long s1 = item1.getFile().length();
+                long s2 = item2.getFile().length();
+                result = Long.compare(s1, s2);
+            } else {
+                result = compareNatural(item1.getName(), item2.getName());
+            }
+            return result * dir;
         });
+    }
+
+    private int compareNatural(String a, String b) {
+        int i = 0, j = 0;
+        int len1 = a.length(), len2 = b.length();
+        while (i < len1 && j < len2) {
+            char c1 = a.charAt(i);
+            char c2 = b.charAt(j);
+            if (Character.isDigit(c1) && Character.isDigit(c2)) {
+                long num1 = 0, num2 = 0;
+                while (i < len1 && Character.isDigit(a.charAt(i))) {
+                    num1 = num1 * 10 + (a.charAt(i) - '0');
+                    i++;
+                }
+                while (j < len2 && Character.isDigit(b.charAt(j))) {
+                    num2 = num2 * 10 + (b.charAt(j) - '0');
+                    j++;
+                }
+                if (num1 != num2) {
+                    return Long.compare(num1, num2);
+                }
+            } else {
+                int cmp = Character.toLowerCase(c1) - Character.toLowerCase(c2);
+                if (cmp != 0) return cmp;
+                i++;
+                j++;
+            }
+        }
+        return len1 - len2;
     }
 
     private Callback<TreeTableColumn<FileItem, FileItem>, TreeTableCell<FileItem, FileItem>> createNameCellFactory() {
@@ -284,6 +372,8 @@ public class BrowserController {
                         treeItem.setExpanded(!treeItem.isExpanded());
                     }
                 });
+
+                container.getChildren().addAll(caretBtn, iconLabel, linkBtn, nameLabel);
             }
 
             @Override
@@ -292,7 +382,6 @@ public class BrowserController {
                 
                 TreeTableRow<?> row = getTreeTableRow();
                 if (row != null) {
-                    // Cố tình giấu đi mũi tên mặc định của JavaFX để tránh bị đè (overlap) lên Folder
                     row.setDisclosureNode(new javafx.scene.layout.Region());
                 }
 
@@ -306,11 +395,8 @@ public class BrowserController {
                         level = getTreeTableView().getTreeItemLevel(row.getTreeItem());
                     }
                     
-                    // Thụt dòng (Indent) chính xác: Mỗi cấp lùi vào 20px
                     int indent = Math.max(0, (level - 1) * 20);
                     container.setPadding(new javafx.geometry.Insets(0, 0, 0, indent));
-                    
-                    container.getChildren().clear();
                     
                     TreeItem<?> treeItem = row != null ? row.getTreeItem() : null;
                     boolean isExpanded = treeItem != null && treeItem.isExpanded();
@@ -319,24 +405,18 @@ public class BrowserController {
                         caretBtn.setText(isExpanded ? "▼" : "▶");
                         caretBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: black; -fx-padding: 0; -fx-cursor: hand; -fx-font-weight: 900; -fx-font-size: 14px;");
                         caretBtn.setDisable(false);
+                        linkBtn.setVisible(true);
+                        linkBtn.setManaged(true);
                     } else {
-                        // Thêm mũi tên góc vuông (↳) cho file y hệt sơ đồ của bạn
                         caretBtn.setText("↳");
                         caretBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: gray; -fx-padding: 0; -fx-font-weight: 900; -fx-font-size: 18px;");
-                        caretBtn.setDisable(true); // không cho bấm vào mũi tên của file
+                        caretBtn.setDisable(true);
+                        linkBtn.setVisible(false);
+                        linkBtn.setManaged(false);
                     }
-                    
-                    container.getChildren().add(caretBtn);
                     
                     iconLabel.setText(item.isDirectory() ? "📁" : "📄");
-                    container.getChildren().add(iconLabel);
-                    
-                    if (item.isDirectory()) {
-                        container.getChildren().add(linkBtn); 
-                    }
-
                     nameLabel.setText(item.getName());
-                    container.getChildren().add(nameLabel);
                     
                     if (item.isLinked()) {
                         nameLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + item.getLinkColor() + ";");
@@ -371,6 +451,49 @@ public class BrowserController {
             event.consume();
         });
 
+        fileTable.setRowFactory(tv -> {
+            TreeTableRow<FileItem> row = new TreeTableRow<>();
+            row.setOnDragEntered(event -> {
+                if (event.getDragboard().hasFiles() && currentDirectory != null) {
+                    row.setStyle("-fx-background-color: #add8e6;");
+                }
+            });
+            row.setOnDragExited(event -> {
+                row.setStyle(null);
+            });
+            row.setOnDragOver(event -> {
+                if (event.getDragboard().hasFiles() && currentDirectory != null) {
+                    event.acceptTransferModes(TransferMode.COPY_OR_MOVE);
+                    event.consume();
+                }
+            });
+            row.setOnDragDropped(event -> {
+                Dragboard db = event.getDragboard();
+                if (db.hasFiles() && currentDirectory != null) {
+                    File dropTargetDir = currentDirectory;
+                    if (!row.isEmpty() && row.getItem() != null && row.getItem().getFile() != null) {
+                        File itemFile = row.getItem().getFile();
+                        dropTargetDir = itemFile.isDirectory() ? itemFile : itemFile.getParentFile();
+                    }
+                    boolean success = processDrop(db.getFiles(), dropTargetDir);
+                    event.setDropCompleted(success);
+                    event.consume();
+                }
+                row.setStyle(null);
+            });
+            return row;
+        });
+
+        fileTable.setOnDragEntered(event -> {
+            if (event.getDragboard().hasFiles() && currentDirectory != null) {
+                fileTable.setStyle("-fx-background-color: #f0f8ff; -fx-indent: 20;");
+            }
+        });
+
+        fileTable.setOnDragExited(event -> {
+            fileTable.setStyle("-fx-indent: 20;");
+        });
+
         fileTable.setOnDragOver(event -> {
             if (event.getDragboard().hasFiles() && currentDirectory != null) {
                 event.acceptTransferModes(TransferMode.COPY_OR_MOVE);
@@ -380,55 +503,130 @@ public class BrowserController {
 
         fileTable.setOnDragDropped(event -> {
             Dragboard db = event.getDragboard();
-            boolean success = false;
-            
             if (db.hasFiles() && currentDirectory != null) {
-                List<File> files = db.getFiles();
-                File dropTargetDir = currentDirectory;
-                
-                for (File file : files) {
-                    if (file.getParentFile().equals(dropTargetDir)) continue;
-                    
-                    Path sourcePath = file.toPath();
-                    Path targetPath = dropTargetDir.toPath().resolve(file.getName());
-                    
-                    try {
-                        if (Files.exists(targetPath)) {
-                            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-                            alert.setTitle("File exists");
-                            alert.setHeaderText("The file/folder already exists: " + file.getName());
-                            alert.setContentText("Do you want to Overwrite or Skip?");
-                            
-                            ButtonType btnOverwrite = new ButtonType("Overwrite");
-                            ButtonType btnSkip = new ButtonType("Skip", ButtonBar.ButtonData.CANCEL_CLOSE);
-                            alert.getButtonTypes().setAll(btnOverwrite, btnSkip);
-                            
-                            Optional<ButtonType> result = alert.showAndWait();
-                            if (result.isPresent() && result.get() == btnOverwrite) {
-                                performTransfer(event.getTransferMode(), sourcePath, targetPath, true);
-                            }
-                        } else {
-                            performTransfer(event.getTransferMode(), sourcePath, targetPath, false);
-                        }
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-                success = true;
-                if (onLinkStateChanged != null) {
-                    onLinkStateChanged.run();
-                }
+                boolean success = processDrop(db.getFiles(), currentDirectory);
+                event.setDropCompleted(success);
             }
-            event.setDropCompleted(success);
+            fileTable.setStyle("-fx-indent: 20;");
             event.consume();
         });
     }
+
+    private boolean processDrop(List<File> files, File dropTargetDir) {
+        Alert typeAlert = new Alert(Alert.AlertType.CONFIRMATION);
+        typeAlert.setTitle("Transfer Type");
+        typeAlert.setHeaderText("Choose Action");
+        typeAlert.setContentText("Do you want to Copy or Move the selected items into:\n" + dropTargetDir.getName());
+        
+        ButtonType btnCopy = new ButtonType("Copy");
+        ButtonType btnMove = new ButtonType("Move");
+        ButtonType btnCancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        
+        typeAlert.getButtonTypes().setAll(btnCopy, btnMove, btnCancel);
+        Optional<ButtonType> typeRes = typeAlert.showAndWait();
+        
+        if (!typeRes.isPresent() || typeRes.get() == btnCancel) {
+            return false;
+        }
+        
+        TransferMode chosenMode = (typeRes.get() == btnMove) ? TransferMode.MOVE : TransferMode.COPY;
+
+        List<File> topLevelFiles = new ArrayList<>();
+        for (File f : files) {
+            boolean hasParent = false;
+            for (File p : files) {
+                if (!p.equals(f) && f.getAbsolutePath().startsWith(p.getAbsolutePath() + File.separator)) {
+                    hasParent = true;
+                    break;
+                }
+            }
+            if (!hasParent) topLevelFiles.add(f);
+        }
+
+        List<Runnable> tasks = new ArrayList<>();
+        List<Exception> errors = new java.util.concurrent.CopyOnWriteArrayList<>();
+        boolean autoOverwrite = false;
+        boolean autoSkip = false;
+
+        for (File file : topLevelFiles) {
+            if (file.getParentFile() != null && file.getParentFile().equals(dropTargetDir)) continue;
+            
+            Path sourcePath = file.toPath();
+            Path targetPath = dropTargetDir.toPath().resolve(file.getName());
+            
+            if (Files.exists(targetPath)) {
+                if (autoSkip) continue;
+                if (!autoOverwrite) {
+                    Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+                    alert.setTitle("File Conflict");
+                    alert.setHeaderText("The file/folder already exists: " + file.getName());
+                    alert.setContentText("Do you want to Overwrite or Skip?");
+                    
+                    ButtonType btnOverwrite = new ButtonType("Overwrite");
+                    ButtonType btnOverwriteAll = new ButtonType("Overwrite All");
+                    ButtonType btnSkip = new ButtonType("Skip");
+                    ButtonType btnSkipAll = new ButtonType("Skip All", ButtonBar.ButtonData.CANCEL_CLOSE);
+                    alert.getButtonTypes().setAll(btnOverwrite, btnOverwriteAll, btnSkip, btnSkipAll);
+                    
+                    Optional<ButtonType> result = alert.showAndWait();
+                    if (!result.isPresent() || result.get() == btnSkip) {
+                        continue;
+                    } else if (result.get() == btnSkipAll) {
+                        autoSkip = true;
+                        continue;
+                    } else if (result.get() == btnOverwriteAll) {
+                        autoOverwrite = true;
+                    }
+                }
+                tasks.add(() -> {
+                    try { 
+                        performTransfer(chosenMode, sourcePath, targetPath, true); 
+                    } catch (Exception e) { 
+                        e.printStackTrace(); 
+                        errors.add(e);
+                    }
+                });
+            } else {
+                tasks.add(() -> {
+                    try { 
+                        performTransfer(chosenMode, sourcePath, targetPath, false); 
+                    } catch (Exception e) { 
+                        e.printStackTrace();
+                        errors.add(e);
+                    }
+                });
+            }
+        }
+        
+        if (!tasks.isEmpty()) {
+            new Thread(() -> {
+                for (Runnable t : tasks) {
+                    t.run();
+                }
+                javafx.application.Platform.runLater(() -> {
+                    if (onLinkStateChanged != null) onLinkStateChanged.run();
+                    if (!errors.isEmpty()) {
+                        Alert a = new Alert(Alert.AlertType.ERROR);
+                        a.setTitle("Transfer Error");
+                        a.setHeaderText("Some files failed to transfer");
+                        a.setContentText("An error occurred with " + errors.size() + " item(s). Message: " + errors.get(0).getMessage());
+                        a.showAndWait();
+                    }
+                });
+            }).start();
+        }
+        return true;
+    }
     
     private void performTransfer(TransferMode mode, Path source, Path target, boolean replace) throws IOException {
-        CopyOption[] options = replace ? new CopyOption[]{StandardCopyOption.REPLACE_EXISTING} : new CopyOption[]{};
-        
         if (mode == TransferMode.MOVE) {
-            Files.move(source, target, options);
+            if (replace && Files.isDirectory(target)) {
+                copyRecursively(source.toFile(), target.toFile(), replace);
+                deleteRecursively(source.toFile());
+            } else {
+                CopyOption[] options = replace ? new CopyOption[]{StandardCopyOption.REPLACE_EXISTING} : new CopyOption[]{};
+                Files.move(source, target, options);
+            }
         } else {
             copyRecursively(source.toFile(), target.toFile(), replace);
         }
@@ -447,7 +645,9 @@ public class BrowserController {
             if (opt != null) {
                 Files.copy(src.toPath(), dest.toPath(), opt);
             } else {
-                Files.copy(src.toPath(), dest.toPath());
+                if (!dest.exists()) {
+                    Files.copy(src.toPath(), dest.toPath());
+                }
             }
         }
     }

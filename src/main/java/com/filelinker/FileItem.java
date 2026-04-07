@@ -10,8 +10,8 @@ public class FileItem {
     private final File file;
     private final boolean isDirectory;
     private final String name;
-    private final String sizeFormatted;
-    private final String dateFormatted;
+    private String sizeFormatted;
+    private String dateFormatted;
     
     private boolean linked = false;
     private String linkColor = "";
@@ -21,22 +21,24 @@ public class FileItem {
         this.isDirectory = file.isDirectory();
         this.name = file.getName();
         
-        String tempSize = "";
-        String tempDate = "";
+        updateInfo();
+    }
+
+    public void updateInfo() {
         try {
             BasicFileAttributes attr = Files.readAttributes(file.toPath(), BasicFileAttributes.class);
             if (!this.isDirectory) {
                 long sizeBytes = attr.size();
-                tempSize = formatSize(sizeBytes);
+                sizeFormatted = formatSize(sizeBytes);
+            } else {
+                sizeFormatted = "";
             }
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-            tempDate = formatter.format(attr.lastModifiedTime().toInstant().atZone(ZoneId.systemDefault()));
+            dateFormatted = formatter.format(attr.lastModifiedTime().toInstant().atZone(ZoneId.systemDefault()));
         } catch (Exception e) {
-            tempSize = "Unknown";
-            tempDate = "Unknown";
+            sizeFormatted = "Unknown";
+            dateFormatted = "Unknown";
         }
-        this.sizeFormatted = tempSize;
-        this.dateFormatted = tempDate;
     }
 
     private String formatSize(long bytes) {
