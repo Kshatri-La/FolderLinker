@@ -454,8 +454,8 @@ public class BrowserController {
         fileTable.setRowFactory(tv -> {
             TreeTableRow<FileItem> row = new TreeTableRow<>();
             row.setOnDragEntered(event -> {
-                if (event.getDragboard().hasFiles() && currentDirectory != null) {
-                    row.setStyle("-fx-background-color: #add8e6;");
+                if (event.getDragboard().hasFiles() && currentDirectory != null && !row.isEmpty()) {
+                    row.setStyle("-fx-background-color: #e0e0e0;"); // Neutral 'bôi đen' background instead of lightblue
                 }
             });
             row.setOnDragExited(event -> {
@@ -484,16 +484,6 @@ public class BrowserController {
             return row;
         });
 
-        fileTable.setOnDragEntered(event -> {
-            if (event.getDragboard().hasFiles() && currentDirectory != null) {
-                fileTable.setStyle("-fx-background-color: #f0f8ff; -fx-indent: 20;");
-            }
-        });
-
-        fileTable.setOnDragExited(event -> {
-            fileTable.setStyle("-fx-indent: 20;");
-        });
-
         fileTable.setOnDragOver(event -> {
             if (event.getDragboard().hasFiles() && currentDirectory != null) {
                 event.acceptTransferModes(TransferMode.COPY_OR_MOVE);
@@ -512,11 +502,83 @@ public class BrowserController {
         });
     }
 
+    private TreeItem<FileItem> findTreeItem(TreeItem<FileItem> node, File target) {
+        if (node == null || node.getValue() == null) return null;
+        if (node.getValue().getFile() != null && node.getValue().getFile().equals(target)) return node;
+        if (node.getChildren() != null) {
+            for (TreeItem<FileItem> child : node.getChildren()) {
+                if (child.getValue() != null && child.getValue().getFile().getName().isEmpty()) continue;
+                TreeItem<FileItem> found = findTreeItem(child, target);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
     private boolean processDrop(List<File> files, File dropTargetDir) {
+        List<File> topLevelFiles = new ArrayList<>();
+        for (File f : files) {
+            boolean hasParent = false;
+            Path fPath = f.toPath().toAbsolutePath();
+            for (File p : files) {
+                if (p.equals(f)) continue;
+                Path pPath = p.toPath().toAbsolutePath();
+                if (fPath.startsWith(pPath)) {
+                    hasParent = true;
+                    break;
+                }
+            }
+            if (!hasParent) topLevelFiles.add(f);
+        }
+
+        if (topLevelFiles.isEmpty()) return false;
+
+        StringBuilder fileListMsg = new StringBuilder();
+        int count = 0;
+        List<File> landingFolders = new ArrayList<>();
+        
+        for (File f : topLevelFiles) {
+            if (count < 10) {
+                fileListMsg.append("- ").append(f.getName()).append("\n");
+            }
+            count++;
+            
+            // Predict routing for highlight
+            File linkedParent = null;
+            File temp = f;
+            while (temp != null) {
+                if (LinkManager.getInstance().isLinked(temp.getName())) linkedParent = temp;
+                temp = temp.getParentFile();
+            }
+            
+            File land = dropTargetDir;
+            if (linkedParent != null && currentDirectory != null) {
+                land = new File(currentDirectory, linkedParent.getName());
+            }
+            if (!landingFolders.contains(land)) landingFolders.add(land);
+        }
+        if (count > 10) {
+            fileListMsg.append("... and ").append(count - 10).append(" more items.\n");
+        }
+
+        fileTable.getSelectionModel().clearSelection();
+        boolean scrolled = false;
+        for (File land : landingFolders) {
+            TreeItem<FileItem> node = findTreeItem(fileTable.getRoot(), land);
+            if (node != null) {
+                fileTable.getSelectionModel().select(node);
+                if (!scrolled) {
+                    int index = fileTable.getRow(node);
+                    if (index >= 0) fileTable.scrollTo(index);
+                    scrolled = true;
+                }
+            }
+        }
+
         Alert typeAlert = new Alert(Alert.AlertType.CONFIRMATION);
-        typeAlert.setTitle("Transfer Type");
-        typeAlert.setHeaderText("Choose Action");
-        typeAlert.setContentText("Do you want to Copy or Move the selected items into:\n" + dropTargetDir.getName());
+        typeAlert.setTitle("Transfer Action");
+        typeAlert.setHeaderText("Transferring " + count + " items");
+        typeAlert.setContentText("Files to transfer:\n" + fileListMsg.toString() + "\nChoose Action:");
         
         ButtonType btnCopy = new ButtonType("Copy");
         ButtonType btnMove = new ButtonType("Move");
@@ -525,23 +587,15 @@ public class BrowserController {
         typeAlert.getButtonTypes().setAll(btnCopy, btnMove, btnCancel);
         Optional<ButtonType> typeRes = typeAlert.showAndWait();
         
+        fileTable.getSelectionModel().clearSelection();
+        
         if (!typeRes.isPresent() || typeRes.get() == btnCancel) {
             return false;
         }
         
         TransferMode chosenMode = (typeRes.get() == btnMove) ? TransferMode.MOVE : TransferMode.COPY;
 
-        List<File> topLevelFiles = new ArrayList<>();
-        for (File f : files) {
-            boolean hasParent = false;
-            for (File p : files) {
-                if (!p.equals(f) && f.getAbsolutePath().startsWith(p.getAbsolutePath() + File.separator)) {
-                    hasParent = true;
-                    break;
-                }
-            }
-            if (!hasParent) topLevelFiles.add(f);
-        }
+
 
         List<Runnable> tasks = new ArrayList<>();
         List<Exception> errors = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -554,12 +608,43 @@ public class BrowserController {
             Path sourcePath = file.toPath();
             Path targetPath = dropTargetDir.toPath().resolve(file.getName());
             
+            // Smart Link Routing: Find the OUTERMOST linked parent folder
+            File linkedParent = null;
+            File temp = file;
+            while (temp != null) {
+                if (LinkManager.getInstance().isLinked(temp.getName())) {
+                    linkedParent = temp;
+                }
+                temp = temp.getParentFile();
+            }
+
+            if (linkedParent != null && currentDirectory != null) {
+                File targetLinkedFolder = new File(currentDirectory, linkedParent.getName());
+                if (!targetLinkedFolder.exists()) {
+                    targetLinkedFolder.mkdirs();
+                }
+                if (targetLinkedFolder.isDirectory()) {
+                    Path relative = linkedParent.toPath().relativize(sourcePath.toAbsolutePath());
+                    if (relative.toString().isEmpty()) {
+                        targetPath = targetLinkedFolder.toPath();
+                    } else {
+                        targetPath = targetLinkedFolder.toPath().resolve(relative);
+                    }
+                    try {
+                        Files.createDirectories(targetPath.getParent());
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            
+            final Path finalTargetPath = targetPath;
             if (Files.exists(targetPath)) {
                 if (autoSkip) continue;
                 if (!autoOverwrite) {
                     Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
                     alert.setTitle("File Conflict");
-                    alert.setHeaderText("The file/folder already exists: " + file.getName());
+                    alert.setHeaderText("The file/folder already exists:\n" + targetPath.getFileName());
                     alert.setContentText("Do you want to Overwrite or Skip?");
                     
                     ButtonType btnOverwrite = new ButtonType("Overwrite");
@@ -568,6 +653,8 @@ public class BrowserController {
                     ButtonType btnSkipAll = new ButtonType("Skip All", ButtonBar.ButtonData.CANCEL_CLOSE);
                     alert.getButtonTypes().setAll(btnOverwrite, btnOverwriteAll, btnSkip, btnSkipAll);
                     
+                    // Need to run dialogue on UI Thread safely because processDrop might be triggered
+                    // Wait, processDrop is currently ON the UI thread! The background thread is launched LATER.
                     Optional<ButtonType> result = alert.showAndWait();
                     if (!result.isPresent() || result.get() == btnSkip) {
                         continue;
@@ -580,7 +667,7 @@ public class BrowserController {
                 }
                 tasks.add(() -> {
                     try { 
-                        performTransfer(chosenMode, sourcePath, targetPath, true); 
+                        performTransfer(chosenMode, sourcePath, finalTargetPath, true); 
                     } catch (Exception e) { 
                         e.printStackTrace(); 
                         errors.add(e);
@@ -589,7 +676,7 @@ public class BrowserController {
             } else {
                 tasks.add(() -> {
                     try { 
-                        performTransfer(chosenMode, sourcePath, targetPath, false); 
+                        performTransfer(chosenMode, sourcePath, finalTargetPath, false); 
                     } catch (Exception e) { 
                         e.printStackTrace();
                         errors.add(e);
