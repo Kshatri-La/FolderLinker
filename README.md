@@ -34,4 +34,12 @@ FileLinker is a high-performance, dual-site file management application built on
   - `[❌] Delete`: Xóa (Có hộp thoại báo động nhắc nhở bảo vệ dữ liệu).
   - `[📤] Export`: Giữ phím Shift hoặc Ctrl và rải chuột bôi đen ngẫu nhiên. Bấm nút Mũi tên này để ra lệnh xuất toàn bộ cái đống hỗn độn vừa chọn ra ổ cứng máy tính.
 
+## For example
+<img width="1225" height="416" alt="Ảnh chụp màn hình 2026-04-07 085051" src="https://github.com/user-attachments/assets/9c194902-5128-4ecf-95f1-3d7ca843d71c" />
+<img width="1234" height="742" alt="Ảnh chụp màn hình 2026-04-07 085108" src="https://github.com/user-attachments/assets/9931b16d-bf4a-4f28-a8c7-390385e1c243" />
+<img width="1233" height="655" alt="Ảnh chụp màn hình 2026-04-07 085120" src="https://github.com/user-attachments/assets/c97a875c-00ba-4b46-ad86-2aceb58c7d53" />
+<img width="1233" height="741" alt="Ảnh chụp màn hình 2026-04-07 085136" src="https://github.com/user-attachments/assets/ffdb7af6-9279-4e8b-85c3-71b843aeda9c" />
+<img width="1234" height="753" alt="Ảnh chụp màn hình 2026-04-07 085145" src="https://github.com/user-attachments/assets/37cc1910-1ed9-4a83-b691-44b3ac1629ac" />
+<img width="1229" height="749" alt="Ảnh chụp màn hình 2026-04-07 085153" src="https://github.com/user-attachments/assets/14b4e3f7-0fa7-4500-96a1-3a75bccd0eaf" />
+
 
